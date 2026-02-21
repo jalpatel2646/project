@@ -148,3 +148,46 @@ body {
   -webkit-text-fill-color: transparent;
   animation: shimmer 3s linear infinite;
 }
+
+/* Cursor blink for typewriter */
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Quantum Mode Enhancements */
+.quantum-mode {
+  --neon-primary: #00ffc8;
+  --neon-secondary: #00e5ff;
+  --neon-accent: #7c3aed;
+}
+
+.quantum-mode .neon-glow {
+  animation: neonPulse 1.5s ease-in-out infinite;
+}
+
+.quantum-mode .neon-text {
+  animation: neonTextGlow 1.5s ease-in-out infinite;
+}
+
+/* Pulse ring for environmental gauges */
+@keyframes pulseRing {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}

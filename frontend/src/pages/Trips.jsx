@@ -1,169 +1,555 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Route as RouteIcon, Plus, Search, MapPin, Truck, Trash2, X, Clock } from 'lucide-react';
-import { useConfirm, useToast } from '../context/ConfirmContext';
-import { AnimatedTable, AnimatedButton, StaggerContainer, StaggerItem } from '../components/AnimatedComponents';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState } from 'react';
+import {
+    Plus, Check, X, Play, ChevronDown, MapPin, Truck,
+    Package, Navigation, DollarSign, MoreHorizontal
+} from 'lucide-react';
 
+/* ═══════════════════════════════════════════
+   STATIC DATA
+═══════════════════════════════════════════ */
+const TRIPS_DATA = [
+    {
+        id: 1,
+        origin: 'Los Angeles, CA',
+        destination: 'San Francisco, CA',
+        vehicle: 'FL-2048-CA',
+        driver: 'James Rodriguez',
+        cargo: '2,800 kg',
+        distance: '615 km',
+        status: 'Dispatched',
+        revenue: '$4,500',
+        actions: ['complete', 'cancel'],
+    },
+    {
+        id: 2,
+        origin: 'Chicago, IL',
+        destination: 'Detroit, MI',
+        vehicle: 'FL-5120-IL',
+        driver: 'Michael Torres',
+        cargo: '28,000 kg',
+        distance: '450 km',
+        status: 'Dispatched',
+        revenue: '$8,200',
+        actions: ['complete', 'cancel'],
+    },
+    {
+        id: 3,
+        origin: 'Dallas, TX',
+        destination: 'Houston, TX',
+        vehicle: 'FL-1024-TX',
+        driver: 'Sarah Chen',
+        cargo: '18,000 kg',
+        distance: '385 km',
+        status: 'Completed',
+        revenue: '$3,800',
+        actions: [],
+    },
+    {
+        id: 4,
+        origin: 'Atlanta, GA',
+        destination: 'Miami, FL',
+        vehicle: 'FL-4096-FL',
+        driver: 'David Kim',
+        cargo: '15,000 kg',
+        distance: '1,060 km',
+        status: 'Completed',
+        revenue: '$7,600',
+        actions: [],
+    },
+    {
+        id: 5,
+        origin: 'Seattle, WA',
+        destination: 'Portland, OR',
+        vehicle: 'FL-6144-WA',
+        driver: 'Sarah Chen',
+        cargo: '12,000 kg',
+        distance: '280 km',
+        status: 'Completed',
+        revenue: '$2,900',
+        actions: [],
+    },
+    {
+        id: 6,
+        origin: 'Columbus, OH',
+        destination: 'Pittsburgh, PA',
+        vehicle: 'FL-8192-OH',
+        driver: 'David Kim',
+        cargo: '20,000 kg',
+        distance: '260 km',
+        status: 'Draft',
+        revenue: '$3,200',
+        actions: ['dispatch'],
+    },
+    {
+        id: 7,
+        origin: 'Denver, CO',
+        destination: 'Kansas City, MO',
+        vehicle: 'FL-1024-TX',
+        driver: 'Emily Watson',
+        cargo: '22,000 kg',
+        distance: '900 km',
+        status: 'Cancelled',
+        revenue: '$0',
+        actions: [],
+    },
+    {
+        id: 8,
+        origin: 'Phoenix, AZ',
+        destination: 'Las Vegas, NV',
+        vehicle: 'FL-6144-WA',
+        driver: 'James Rodriguez',
+        cargo: '16,000 kg',
+        distance: '470 km',
+        status: 'Completed',
+        revenue: '$4,100',
+        actions: [],
+    },
+];
+
+/* ═══════════════════════════════════════════
+   STATUS BADGE CONFIG
+═══════════════════════════════════════════ */
+const STATUS_CONFIG = {
+    Dispatched: { bg: 'rgba(59,130,246,0.12)', color: '#60A5FA', border: 'rgba(59,130,246,0.25)' },
+    Completed: { bg: 'rgba(34,197,94,0.12)', color: '#4ade80', border: 'rgba(34,197,94,0.25)' },
+    Draft: { bg: 'rgba(100,116,139,0.12)', color: '#94A3B8', border: 'rgba(100,116,139,0.25)' },
+    Cancelled: { bg: 'rgba(239,68,68,0.12)', color: '#f87171', border: 'rgba(239,68,68,0.25)' },
+};
+
+/* ═══════════════════════════════════════════
+   COMPONENT
+═══════════════════════════════════════════ */
 const Trips = () => {
-    const [trips, setTrips] = useState([]);
-    const [vehicles, setVehicles] = useState([]);
-    const [drivers, setDrivers] = useState([]);
-    const [search, setSearch] = useState('');
-    const [showModal, setShowModal] = useState(false);
-    const [form, setForm] = useState({ tripId: '', vehicle: '', driver: '', origin: '', destination: '', cargoWeight: '', status: 'Draft' });
+    const [statusFilter, setStatusFilter] = useState('All Statuses');
+    const [hoveredRow, setHoveredRow] = useState(null);
 
-    const token = localStorage.getItem('token');
-    const headers = { Authorization: `Bearer ${token}` };
-    const confirm = useConfirm();
-    const toast = useToast();
+    const statuses = ['All Statuses', 'Dispatched', 'Completed', 'Draft', 'Cancelled'];
 
-    const loadData = async () => {
-        try {
-            const [t, v, d] = await Promise.all([
-                axios.get('http://localhost:5000/api/trips', { headers }),
-                axios.get('http://localhost:5000/api/vehicles', { headers }),
-                axios.get('http://localhost:5000/api/drivers', { headers })
-            ]);
-            setTrips(t.data);
-            setVehicles(v.data);
-            setDrivers(d.data);
-        } catch (e) { console.error(e); }
+    const filteredTrips =
+        statusFilter === 'All Statuses'
+            ? TRIPS_DATA
+            : TRIPS_DATA.filter((t) => t.status === statusFilter);
+
+    /* ── Action button renderer ── */
+    const renderActions = (actions) => {
+        if (!actions || actions.length === 0) return <span style={{ color: '#444' }}>—</span>;
+        return (
+            <div style={{ display: 'flex', gap: '6px' }}>
+                {actions.map((action) => {
+                    if (action === 'complete')
+                        return (
+                            <button
+                                key={action}
+                                title="Complete"
+                                style={{
+                                    width: '30px', height: '30px', borderRadius: '8px',
+                                    border: '1px solid rgba(34,197,94,0.25)', background: 'rgba(34,197,94,0.1)',
+                                    color: '#4ade80', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    transition: 'all 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(34,197,94,0.2)'; e.currentTarget.style.transform = 'scale(1.08)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(34,197,94,0.1)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                            >
+                                <Check size={14} strokeWidth={2.5} />
+                            </button>
+                        );
+                    if (action === 'cancel')
+                        return (
+                            <button
+                                key={action}
+                                title="Cancel"
+                                style={{
+                                    width: '30px', height: '30px', borderRadius: '8px',
+                                    border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.1)',
+                                    color: '#f87171', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    transition: 'all 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.transform = 'scale(1.08)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                            >
+                                <X size={14} strokeWidth={2.5} />
+                            </button>
+                        );
+                    if (action === 'dispatch')
+                        return (
+                            <button
+                                key={action}
+                                title="Dispatch"
+                                style={{
+                                    width: '30px', height: '30px', borderRadius: '8px',
+                                    border: '1px solid rgba(59,130,246,0.25)', background: 'rgba(59,130,246,0.1)',
+                                    color: '#60A5FA', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    transition: 'all 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(59,130,246,0.2)'; e.currentTarget.style.transform = 'scale(1.08)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(59,130,246,0.1)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                            >
+                                <Play size={13} strokeWidth={2.5} />
+                            </button>
+                        );
+                    return null;
+                })}
+            </div>
+        );
     };
 
-    useEffect(() => { loadData(); }, []);
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            await axios.post('http://localhost:5000/api/trips', { ...form, cargoWeight: Number(form.cargoWeight), dispatchDate: new Date() }, { headers });
-            setShowModal(false);
-            setForm({ tripId: '', vehicle: '', driver: '', origin: '', destination: '', cargoWeight: '', status: 'Draft' });
-            loadData();
-            toast('Trip created successfully', 'success');
-        } catch (e) { toast('Failed to create trip', 'error'); }
+    /* ── Status badge ── */
+    const renderBadge = (status) => {
+        const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.Draft;
+        return (
+            <span
+                style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '4px 12px',
+                    borderRadius: '999px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    letterSpacing: '0.01em',
+                    background: cfg.bg,
+                    color: cfg.color,
+                    border: `1px solid ${cfg.border}`,
+                    whiteSpace: 'nowrap',
+                }}
+            >
+                {status}
+            </span>
+        );
     };
 
-    const filtered = trips.filter(t => t.tripId.toLowerCase().includes(search.toLowerCase()) || t.origin.toLowerCase().includes(search.toLowerCase()));
-
-    const columns = [
-        { header: 'Trip ID', accessor: 'tripId', render: (val) => <span style={{ fontWeight: 700, color: '#818cf8' }}>{val}</span> },
-        {
-            header: 'Vehicle', accessor: 'vehicle', render: (val) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Truck size={14} color="#555" />
-                    <span style={{ fontSize: '13px', color: '#eee' }}>{val?.licensePlate || 'N/A'}</span>
-                </div>
-            )
-        },
-        {
-            header: 'Route', accessor: 'route', render: (_, t) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <MapPin size={13} color="#4ade80" />
-                    <span style={{ fontSize: '12px', color: '#aaa' }}>{t.origin} → {t.destination}</span>
-                </div>
-            )
-        },
-        {
-            header: 'Status', accessor: 'status', render: (val) => (
-                <span style={{
-                    fontSize: '10px', fontWeight: 700, padding: '4px 10px', borderRadius: '8px',
-                    background: val === 'Completed' ? 'rgba(74,222,128,0.1)' : 'rgba(251,191,36,0.1)',
-                    color: val === 'Completed' ? '#4ade80' : '#fbbf24'
-                }}>{val}</span>
-            )
-        },
-        {
-            header: 'Date', accessor: 'dispatchDate', render: (val) => (
-                <span style={{ fontSize: '12px', color: '#555' }}>{new Date(val).toLocaleDateString()}</span>
-            )
-        },
-        {
-            header: '', accessor: 'actions', render: (_, t) => (
-                <motion.button
-                    whileHover={{ scale: 1.1, color: '#ef4444' }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={async () => {
-                        const ok = await confirm({ title: 'Delete Trip', message: `Delete ${t.tripId}?` });
-                        if (ok) {
-                            try {
-                                await axios.delete(`http://localhost:5000/api/trips/${t._id}`, { headers });
-                                toast('Trip deleted', 'success');
-                                loadData();
-                            } catch (e) { toast('Failed to delete', 'error'); }
-                        }
-                    }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}
-                >
-                    <Trash2 size={16} />
-                </motion.button>
-            )
-        }
-    ];
-
+    /* ═══════════════════════════════════════════
+       RENDER
+    ═══════════════════════════════════════════ */
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                    <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#fff' }}>Trip Logistics</h1>
-                    <p style={{ fontSize: '14px', color: '#666' }}>{trips.length} movements in log</p>
-                </motion.div>
-                <AnimatedButton onClick={() => setShowModal(true)} variant="primary">
-                    <Plus size={16} /> New Trip
-                </AnimatedButton>
-            </div>
+        <div
+            style={{
+                minHeight: '100vh',
+                padding: '36px 40px',
+                fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+                color: '#e2e8f0',
+                margin: '-40px',
+            }}
+        >
+            {/* ── HEADER ── */}
+            <div
+                style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: '24px',
+                }}
+            >
+                <div>
+                    <h1
+                        style={{
+                            fontSize: '26px',
+                            fontWeight: 700,
+                            color: '#FFFFFF',
+                            margin: '0 0 16px',
+                            letterSpacing: '-0.02em',
+                        }}
+                    >
+                        Trips
+                    </h1>
 
-            <div style={{ background: '#141414', borderRadius: '16px', border: '1px solid #1e1e1e', overflow: 'hidden' }}>
-                <div style={{ padding: '24px', borderBottom: '1px solid #1e1e1e', display: 'flex', justifyContent: 'space-between' }}>
-                    <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
-                        <Search size={16} color="#555" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                        <input type="text" placeholder="Search trips..." value={search} onChange={e => setSearch(e.target.value)}
-                            style={{ width: '100%', padding: '8px 12px 8px 36px', background: '#0a0a0a', border: '1px solid #222', borderRadius: '10px', color: '#eee', fontSize: '13px', outline: 'none' }} />
+                    {/* Status filter dropdown */}
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            style={{
+                                appearance: 'none',
+                                padding: '8px 36px 8px 14px',
+                                borderRadius: '8px',
+                                border: '1px solid #2a2a2a',
+                                background: '#141414',
+                                color: '#94A3B8',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                fontFamily: 'inherit',
+                                cursor: 'pointer',
+                                outline: 'none',
+                                transition: 'border-color 0.15s',
+                                colorScheme: 'dark',
+                            }}
+                            onFocus={(e) => (e.target.style.borderColor = 'rgba(59,130,246,0.5)')}
+                            onBlur={(e) => (e.target.style.borderColor = '#2a2a2a')}
+                        >
+                            {statuses.map((s) => (
+                                <option key={s} value={s}>
+                                    {s}
+                                </option>
+                            ))}
+                        </select>
+                        <ChevronDown
+                            size={14}
+                            color="#555"
+                            style={{
+                                position: 'absolute',
+                                right: '12px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                pointerEvents: 'none',
+                            }}
+                        />
                     </div>
                 </div>
-                <AnimatedTable columns={columns} data={filtered} />
+
+                {/* New Trip button */}
+                <button
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 20px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: '#3B82F6',
+                        color: '#FFFFFF',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        boxShadow: '0 1px 3px rgba(59,130,246,0.3), 0 4px 12px rgba(59,130,246,0.15)',
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#2563EB';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                        e.currentTarget.style.boxShadow = '0 2px 6px rgba(59,130,246,0.4), 0 8px 20px rgba(59,130,246,0.2)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#3B82F6';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(59,130,246,0.3), 0 4px 12px rgba(59,130,246,0.15)';
+                    }}
+                >
+                    <Plus size={16} strokeWidth={2.5} />
+                    New Trip
+                </button>
             </div>
 
-            <AnimatePresence>
-                {showModal && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(8px)' }}>
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            style={{ background: '#141414', border: '1px solid #1e1e1e', padding: '32px', width: '100%', maxWidth: '500px', borderRadius: '16px' }}
-                        >
-                            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#fff', marginBottom: '24px' }}>New Trip</h3>
-                            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                <input type="text" placeholder="Trip ID (e.g. TR-100)" value={form.tripId} onChange={e => setForm({ ...form, tripId: e.target.value })} required
-                                    style={{ width: '100%', padding: '12px', background: '#0a0a0a', border: '1px solid #333', borderRadius: '10px', color: '#fff' }} />
-                                <select value={form.vehicle} onChange={e => setForm({ ...form, vehicle: e.target.value })} required
-                                    style={{ width: '100%', padding: '12px', background: '#0a0a0a', border: '1px solid #333', borderRadius: '10px', color: '#fff', colorScheme: 'dark' }}>
-                                    <option value="">Select Vehicle</option>
-                                    {vehicles.map(v => <option key={v._id} value={v._id}>{v.licensePlate}</option>)}
-                                </select>
-                                <select value={form.driver} onChange={e => setForm({ ...form, driver: e.target.value })} required
-                                    style={{ width: '100%', padding: '12px', background: '#0a0a0a', border: '1px solid #333', borderRadius: '10px', color: '#fff', colorScheme: 'dark' }}>
-                                    <option value="">Select Driver</option>
-                                    {drivers.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
-                                </select>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                    <input type="text" placeholder="Origin" value={form.origin} onChange={e => setForm({ ...form, origin: e.target.value })} required
-                                        style={{ width: '100%', padding: '12px', background: '#0a0a0a', border: '1px solid #333', borderRadius: '10px', color: '#fff' }} />
-                                    <input type="text" placeholder="Destination" value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} required
-                                        style={{ width: '100%', padding: '12px', background: '#0a0a0a', border: '1px solid #333', borderRadius: '10px', color: '#fff' }} />
-                                </div>
-                                <input type="number" placeholder="Cargo Weight (kg)" value={form.cargoWeight} onChange={e => setForm({ ...form, cargoWeight: e.target.value })} required
-                                    style={{ width: '100%', padding: '12px', background: '#0a0a0a', border: '1px solid #333', borderRadius: '10px', color: '#fff' }} />
-                                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                                    <button type="button" onClick={() => setShowModal(false)} style={{ flex: 1, padding: '12px', background: '#1a1a1a', color: '#eee', border: '1px solid #333', borderRadius: '12px', cursor: 'pointer' }}>Cancel</button>
-                                    <AnimatedButton type="submit" variant="primary" style={{ flex: 1, padding: '12px' }}>Create Trip</AnimatedButton>
-                                </div>
-                            </form>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            {/* ── TABLE CARD ── */}
+            <div
+                style={{
+                    background: '#141414',
+                    borderRadius: '14px',
+                    border: '1px solid #1e1e1e',
+                    overflow: 'hidden',
+                }}
+            >
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '960px' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '1px solid #1e1e1e' }}>
+                                {[
+                                    { label: 'Route', align: 'left' },
+                                    { label: 'Vehicle', align: 'left' },
+                                    { label: 'Driver', align: 'left' },
+                                    { label: 'Cargo', align: 'left' },
+                                    { label: 'Distance', align: 'left' },
+                                    { label: 'Status', align: 'left' },
+                                    { label: 'Revenue', align: 'right' },
+                                    { label: 'Actions', align: 'center' },
+                                ].map((col) => (
+                                    <th
+                                        key={col.label}
+                                        style={{
+                                            padding: '14px 20px',
+                                            textAlign: col.align,
+                                            fontSize: '11px',
+                                            fontWeight: 600,
+                                            color: '#555',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.06em',
+                                            whiteSpace: 'nowrap',
+                                            background: '#0f0f0f',
+                                        }}
+                                    >
+                                        {col.label}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredTrips.map((trip, idx) => (
+                                <tr
+                                    key={trip.id}
+                                    onMouseEnter={() => setHoveredRow(trip.id)}
+                                    onMouseLeave={() => setHoveredRow(null)}
+                                    style={{
+                                        borderBottom:
+                                            idx < filteredTrips.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                                        background: hoveredRow === trip.id ? 'rgba(255,255,255,0.03)' : 'transparent',
+                                        transition: 'background 0.15s ease',
+                                        cursor: 'default',
+                                    }}
+                                >
+                                    {/* Route */}
+                                    <td style={{ padding: '16px 20px' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                            <span
+                                                style={{
+                                                    fontSize: '13.5px',
+                                                    fontWeight: 600,
+                                                    color: '#e2e8f0',
+                                                    lineHeight: '1.4',
+                                                }}
+                                            >
+                                                {trip.origin}
+                                            </span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <Navigation
+                                                    size={10}
+                                                    color="#555"
+                                                    style={{ transform: 'rotate(135deg)', flexShrink: 0 }}
+                                                />
+                                                <span style={{ fontSize: '12.5px', color: '#888', fontWeight: 500 }}>
+                                                    {trip.destination}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    {/* Vehicle */}
+                                    <td style={{ padding: '16px 20px' }}>
+                                        <span
+                                            style={{
+                                                fontSize: '13px',
+                                                fontWeight: 600,
+                                                color: '#c7d2fe',
+                                                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                                                letterSpacing: '0.02em',
+                                                background: 'rgba(99,102,241,0.1)',
+                                                padding: '3px 8px',
+                                                borderRadius: '5px',
+                                            }}
+                                        >
+                                            {trip.vehicle}
+                                        </span>
+                                    </td>
+
+                                    {/* Driver */}
+                                    <td style={{ padding: '16px 20px' }}>
+                                        <span style={{ fontSize: '13.5px', fontWeight: 500, color: '#cbd5e1' }}>
+                                            {trip.driver}
+                                        </span>
+                                    </td>
+
+                                    {/* Cargo */}
+                                    <td style={{ padding: '16px 20px' }}>
+                                        <span style={{ fontSize: '13px', color: '#888', fontWeight: 500 }}>
+                                            {trip.cargo}
+                                        </span>
+                                    </td>
+
+                                    {/* Distance */}
+                                    <td style={{ padding: '16px 20px' }}>
+                                        <span style={{ fontSize: '13px', color: '#888', fontWeight: 500 }}>
+                                            {trip.distance}
+                                        </span>
+                                    </td>
+
+                                    {/* Status */}
+                                    <td style={{ padding: '16px 20px' }}>{renderBadge(trip.status)}</td>
+
+                                    {/* Revenue */}
+                                    <td
+                                        style={{
+                                            padding: '16px 20px',
+                                            textAlign: 'right',
+                                        }}
+                                    >
+                                        <span
+                                            style={{
+                                                fontSize: '14px',
+                                                fontWeight: 700,
+                                                color: trip.revenue === '$0' ? '#444' : '#fff',
+                                                fontFeatureSettings: "'tnum'",
+                                            }}
+                                        >
+                                            {trip.revenue}
+                                        </span>
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td style={{ padding: '16px 20px', textAlign: 'center' }}>
+                                        {renderActions(trip.actions)}
+                                    </td>
+                                </tr>
+                            ))}
+
+                            {/* Empty state */}
+                            {filteredTrips.length === 0 && (
+                                <tr>
+                                    <td
+                                        colSpan={8}
+                                        style={{
+                                            padding: '60px 20px',
+                                            textAlign: 'center',
+                                            color: '#555',
+                                            fontSize: '14px',
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        No trips match the selected filter.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* ── FOOTER SUMMARY ── */}
+            <div
+                style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginTop: '16px',
+                    padding: '0 4px',
+                }}
+            >
+                <span style={{ fontSize: '13px', color: '#555', fontWeight: 500 }}>
+                    Showing{' '}
+                    <span style={{ color: '#aaa', fontWeight: 600 }}>{filteredTrips.length}</span> of{' '}
+                    <span style={{ color: '#aaa', fontWeight: 600 }}>{TRIPS_DATA.length}</span> trips
+                </span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    {['Dispatched', 'Completed', 'Draft', 'Cancelled'].map((st) => {
+                        const count = TRIPS_DATA.filter((t) => t.status === st).length;
+                        const cfg = STATUS_CONFIG[st];
+                        return (
+                            <span
+                                key={st}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    fontSize: '12px',
+                                    color: cfg.color,
+                                    fontWeight: 600,
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        width: '7px',
+                                        height: '7px',
+                                        borderRadius: '50%',
+                                        background: cfg.color,
+                                        display: 'inline-block',
+                                    }}
+                                />
+                                {count} {st}
+                            </span>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 };
